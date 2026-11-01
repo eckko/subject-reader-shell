@@ -12,7 +12,7 @@
 # One-time setup (Settings > Secrets and variables > Actions of this repo):
 #   READER_SUBJECT_REPO_TOKEN  fine-grained token for the subject repo only,
 #                       "Contents: Read and write"
-#   SUBJECT_KEY         the subject key: 64 hex characters. One key for the
+#   SUBJECT_KEY         the subject key: 32 bytes as 64 hex characters or base64. One key for the
 #                       whole subject. Keep a copy in your password manager.
 #   (optional variable) READER_SUBJECT_REPO  name of the subject repo
 name: Publish encrypted book to reader site
@@ -60,8 +60,8 @@ jobs:
           elif [ -z "$TOKEN" ]; then
             echo "::error::The secret READER_SUBJECT_REPO_TOKEN is missing."
             exit 1
-          elif ! [[ "$KEY" =~ ^[0-9a-fA-F]{64}$ ]]; then
-            echo "::error::The secret SUBJECT_KEY must be 64 hex characters."
+          elif [ -z "$KEY" ]; then
+            echo "::error::The secret SUBJECT_KEY is missing."
             exit 1
           fi
 

@@ -12,7 +12,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Tool tests
-        run: python3 tests/test_tools.py
+      - name: Read the template tag from subject.json
+        id: tag
+        run: |
+          tag="$(python3 -c 'import json;print(json.load(open("subject.json")).get("templateTag",""))')"
+          if ! [[ "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::subject.json needs a templateTag such as 3.1.0 (no v, no branch)"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Check out the site tools (template at that tag)
+        uses: actions/checkout@v4
+        with:
+          repository: eckko/recall-quiz-site-template
+          ref: ${{ steps.tag.outputs.tag }}
+          path: template
       - name: Book folders and books.json
-        run: python3 tools/build_hub.py --check
+        run: python3 template/tools/site/build_hub.py --check

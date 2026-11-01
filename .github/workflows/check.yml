@@ -1,0 +1,18 @@
+name: Check subject site
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tool tests
+        run: python3 tests/test_tools.py
+      - name: Book folders and books.json
+        run: python3 tools/build_hub.py --check

@@ -27,7 +27,7 @@ This is the encrypted counterpart of
     quiz/questions.enc     the quiz: all questions, same key
     quiz/media/**/*.enc    the quiz: encrypted pictures, same key
   sample/                  a tiny sample book (delete it for a real subject)
-  tools/  tests/  templates/
+  .github/workflows/check.yml   runs the template's checks (no tools here)
 ```
 
 Nothing readable from a book is ever stored here: only ciphertext. The key
@@ -36,8 +36,10 @@ is **never** stored in any repo. One key opens every book of the subject.
 ## Start a new subject
 
 1. **Use this template → Create a new repository** (public).
-2. Edit `subject.json`: `{ "title": "Coding" }`. Delete `sample/` and run
-   `python3 tools/build_hub.py`.
+2. Edit `subject.json`: `{ "title": "Coding", "templateTag": "3.1.0" }`
+   (the tag of the quiz template whose tools check this site). Delete
+   `sample/` and `books.json`'s entry for it (the check workflow or
+   `python3 build_hub.py` from the template rewrites `books.json`).
 3. **Settings → Pages → Deploy from a branch**, branch `main`, folder
    `/ (root)`. The hub is at `https://<user>.github.io/<repository>/`.
 4. Create a fine-grained personal access token limited to this repository
@@ -57,22 +59,22 @@ domains.
 
 ## Add a book
 
-A private book repo builds the encrypted book folder with the build tools of
-the quiz template (`tools/book_build/` in `recall-quiz-site-template`, at the
-same tag the pages load) and publishes it here:
+A private book repo builds the encrypted book folder and publishes it here,
+both with the tools of the quiz template at one exact tag
+(`tools/book_build/` and `tools/site/` in `recall-quiz-site-template`). This
+repo holds no tools of its own, so it can never fall behind them.
 
 1. Save the token as the secret `READER_SUBJECT_REPO_TOKEN` and the subject key
    as `SUBJECT_KEY` in the book repo.
 2. Copy `templates/publish-encrypted-book.yml` from the quiz template to
    `.github/workflows/` there and set the values at the top. The book's
    folder name defaults to the repo's name (lower-case letters, digits, dashes).
-3. Push to `main`, or run the workflow by hand. It runs
-   `tools/publish_book.sh`, which copies the book and rewrites `books.json`
-   in one commit.
+3. Push to `main`, or run the workflow by hand. It builds the book, checks it
+   and commits it here together with the rewritten `books.json`.
 
-By hand: `python3 tools/add_book.py ../my-built-book --name my-book`, then
-commit. To remove a book: delete its folder, run `python3 tools/build_hub.py`,
-commit.
+To remove a book: delete its folder and run the check workflow's
+`build_hub.py` (or `python3 <template>/tools/site/build_hub.py`) to rewrite
+`books.json`, then commit.
 
 ## What is copied, and what is refused
 
@@ -80,7 +82,9 @@ Exactly these items (those that exist): `index.html`, `read.html`,
 `quiz.html`, `book.json`, `data/`, `media/` and `quiz/`. Nothing else in the
 private repo is read.
 
-`add_book.py` and the check workflow refuse a book when:
+The checks (`tools/site/build_hub.py` and `add_book.py` in the template, run
+by the publish workflow and by `.github/workflows/check.yml` here) refuse a
+book when:
 
 - its folder holds anything else, or `data/`, `media/` or `quiz/` holds a file
   that is not `*.enc`;
@@ -88,7 +92,7 @@ private repo is read.
   `data/manifest.enc`; `quiz`: `quiz.html` and `quiz/questions.enc`), or those
   files exist without the view being listed;
 - a page does not load `js/unlock.js` from the CDN with the **same exact tag**
-  such as `@3.0.0` (a `v` prefix, a short tag or a branch such as `@main` is
+  such as `@3.1.0` (a `v` prefix, a short tag or a branch such as `@main` is
   refused, because it can change under the site);
 - its `id` is missing, is not lower-case letters, digits and dashes, or is
   already used by another book in this site.
@@ -97,15 +101,10 @@ When a book is refused, nothing in the site changes.
 
 ## Change the template version
 
-```bash
-python3 tools/set_template_tag.py 3.1.0          # every book
-python3 tools/set_template_tag.py 3.1.0 --book sample
-python3 tools/build_hub.py --check
-```
-
-A tag is immutable: a fix is a new tag. The tag in a book's pages is also what
-the workflow checks the build tools out at, so re-run the book's workflow after
-changing the tag it uses.
+Re-run each book's publish workflow with the new `TEMPLATE_TAG`: the pages,
+the build and the publish tools all move to that tag together. Then set
+`templateTag` in `subject.json` to the same tag. A tag is immutable: a fix is a
+new tag.
 
 ## Book ids and progress
 
@@ -117,6 +116,6 @@ uses. **Never change a book's id** once readers have progress.
 
 ## Checks
 
-`python3 tests/test_tools.py` and `python3 tools/build_hub.py --check` run on
-every push (`.github/workflows/check.yml`). Also run the `check-copywright`
-skill on this repo before it goes public: it must show 0 HIGH.
+`.github/workflows/check.yml` runs the template's `build_hub.py --check` on
+every push. Also run the `check-copywright` skill on this repo before it goes
+public: it must show 0 HIGH.

@@ -16,6 +16,8 @@ import add_book  # noqa: E402
 import build_hub  # noqa: E402
 import set_template_tag  # noqa: E402
 
+BUILD = ROOT / "tools" / "book_build" / "build_book.py"
+
 PAGE = ('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/o/r@%(t)s/style.css">'
         '<script defer src="https://cdn.jsdelivr.net/gh/o/r@%(t)s/app.js"></script>')
 
@@ -132,6 +134,31 @@ class TagTests(SiteCase):
         for bad in ("main", "v0.3.0", "1.0"):
             self.assertEqual(set_template_tag.main([bad, "--subject-root", str(self.site)]), 1)
         self.assertIn("@0.1.0", (self.site / "a" / "index.html").read_text())
+
+
+class BuildBookTests(unittest.TestCase):
+    def run_build(self, env_key, tag):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        (tmp / "book").mkdir()
+        (tmp / "book" / "questions.json").write_text('{"id": "x", "book": "X"}')
+        env = {"PATH": "/usr/bin:/bin"}
+        if env_key is not None:
+            env["SUBJECT_KEY"] = env_key
+        return subprocess.run(
+            [sys.executable, str(BUILD), "--book", str(tmp / "book"), "--epub", "a.epub",
+             "--template-tag", tag, "--out", str(tmp / "out")],
+            env=env, capture_output=True, text=True)
+
+    def test_refuses_a_missing_or_short_key(self):
+        self.assertNotEqual(self.run_build(None, "0.1.0").returncode, 0)
+        self.assertNotEqual(self.run_build("abcd", "0.1.0").returncode, 0)
+
+    def test_refuses_a_branch_or_v_prefix_tag(self):
+        for bad in ("main", "v0.1.0"):
+            result = self.run_build("a" * 64, bad)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("tag", result.stderr + result.stdout)
 
 
 class ThisRepoTests(unittest.TestCase):

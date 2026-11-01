@@ -109,3 +109,11 @@ uses. **Never change a book's id** once readers have progress.
 `python3 tests/test_tools.py` and `python3 tools/build_hub.py --check` run on
 every push (`.github/workflows/check.yml`). Also run the `check-copywright`
 skill on this repo before it goes public: it must show 0 HIGH.
+
+## Building a book from a private book repo
+
+`tools/book_build/build_book.py` turns a book EPUB (plus an optional notes EPUB)
+into the encrypted book folder, using the subject key from the `SUBJECT_KEY`
+environment variable. `templates/publish-encrypted-book.yml` is the GitHub
+Actions workflow a private book repo copies to run it and publish the result
+with `tools/publish_book.sh`. It needs `beautifulsoup4 lxml cryptography`.

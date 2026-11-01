@@ -1,0 +1,105 @@
+# Builds the encrypted site of this book and publishes it into a subject site
+# made from eckko/subject-reader-shell. Copy it to
+# .github/workflows/publish-encrypted-book.yml in the private book repo and set
+# the env values below.
+#
+# The plain book never leaves this repo: the job reads the EPUB (and your
+# notes EPUB), encrypts everything with the subject key inside the runner and
+# publishes only index.html, book.json, data/*.enc and media/*.enc. The build
+# tools come from the subject site's tools/book_build/, and the reader code is
+# loaded by readers from the CDN (eckko/encrypted-book-template) by exact tag.
+#
+# One-time setup (Settings > Secrets and variables > Actions of this repo):
+#   READER_SUBJECT_REPO_TOKEN  fine-grained token for the subject repo only,
+#                       "Contents: Read and write"
+#   SUBJECT_KEY         the subject key: 64 hex characters. One key for the
+#                       whole subject. Keep a copy in your password manager.
+#   (optional variable) READER_SUBJECT_REPO  name of the subject repo
+name: Publish encrypted book to reader site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - references/**
+      - questions.json
+      - book-structure/**
+      - .github/workflows/publish-encrypted-book.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-encrypted-book
+  cancel-in-progress: false
+
+env:
+  READER_SUBJECT_REPO: eckko/${{ vars.READER_SUBJECT_REPO || 'YOUR_SUBJECT_REPO' }}
+  # The folder (and URL name) of the book: lower-case letters, digits, dashes.
+  BOOK_FOLDER: ${{ github.event.repository.name }}
+  BOOK_EPUB: references/YOUR_BOOK.epub
+  NOTES_EPUB: ""            # for example references/my-notes.epub; empty = no notes
+  TEMPLATE_REPO: eckko/encrypted-book-template
+  # An exact tag such as 0.1.0: no "v", never a branch.
+  TEMPLATE_TAG: 0.1.0
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the setup
+        id: setup
+        env:
+          TOKEN: ${{ secrets.READER_SUBJECT_REPO_TOKEN }}
+          KEY: ${{ secrets.SUBJECT_KEY }}
+        run: |
+          if [[ "$READER_SUBJECT_REPO" == *YOUR_* || "$BOOK_EPUB" == *YOUR_* ]]; then
+            echo "::notice::READER_SUBJECT_REPO or BOOK_EPUB is not set; nothing published."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$TOKEN" ]; then
+            echo "::error::The secret READER_SUBJECT_REPO_TOKEN is missing."
+            exit 1
+          elif ! [[ "$KEY" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            echo "::error::The secret SUBJECT_KEY must be 64 hex characters."
+            exit 1
+          fi
+
+      - name: Check out this book repo
+        if: steps.setup.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          path: book
+
+      - name: Check out the subject site
+        if: steps.setup.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.READER_SUBJECT_REPO }}
+          token: ${{ secrets.READER_SUBJECT_REPO_TOKEN }}
+          path: subject
+
+      - name: Set up Python
+        if: steps.setup.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the build tools' packages
+        if: steps.setup.outputs.skip != 'true'
+        run: pip install beautifulsoup4 lxml cryptography
+
+      - name: Build the encrypted site
+        if: steps.setup.outputs.skip != 'true'
+        env:
+          SUBJECT_KEY: ${{ secrets.SUBJECT_KEY }}
+        run: |
+          echo "::add-mask::$SUBJECT_KEY"
+          args=(--book book --epub "$BOOK_EPUB" --template-repo "$TEMPLATE_REPO" \
+                --template-tag "$TEMPLATE_TAG" --out "$RUNNER_TEMP/site")
+          if [ -n "$NOTES_EPUB" ]; then args+=(--notes-epub "$NOTES_EPUB"); fi
+          python3 subject/tools/book_build/build_book.py "${args[@]}"
+
+      - name: Publish
+        if: steps.setup.outputs.skip != 'true'
+        run: subject/tools/publish_book.sh "$RUNNER_TEMP/site" "$BOOK_FOLDER"

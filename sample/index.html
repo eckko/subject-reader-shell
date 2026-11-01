@@ -1,15 +1,40 @@
 <!doctype html>
+<!-- Made by tools/make_subject_pages.py (recall-quiz-site-template 3.0.0).
+     Loads everything from the CDN at that tag; to upgrade, run it again. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Book</title>
-<!-- generic placeholder icon, not from any book; the viewer swaps in the decrypted cover -->
-<link id="icon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6f6a'/%3E%3Cpath d='M9 8h10a4 4 0 0 1 4 4v12H13a4 4 0 0 1-4-4z' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
-<!-- Same page, loaded from the CDN by exact tag. Change the tag with tools/set_template_tag.py. -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/eckko/encrypted-book-template@0.1.0/style.css">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A Field Guide to Noticing (sample book)</title>
+<style>
+main{max-width:26rem;margin:12vh auto;padding:0 1rem;font:1rem/1.5 system-ui,
+sans-serif}.go{display:inline-block;margin:.25rem;padding:.6rem 1rem;
+border:1px solid #2f5bd0;border-radius:.5rem;color:#2f5bd0;
+text-decoration:none;font-weight:600}.go:first-child{background:#2f5bd0;
+color:#fff}
+</style>
+<script src="https://cdn.jsdelivr.net/gh/eckko/recall-quiz-site-template@3.0.0/js/unlock.js"></script>
 </head>
 <body>
-<script defer src="https://cdn.jsdelivr.net/gh/eckko/encrypted-book-template@0.1.0/app.js"></script>
+<main id="choose" hidden>
+<h1>A Field Guide to Noticing (sample book)</h1>
+<p><a class="go" href="read.html">Read book</a></p>
+</main>
+<script>
+SubjectUnlock.ready().then(function route() {
+  var view = new URLSearchParams(location.search).get("view");
+  if (view === "read" || view === "quiz") {
+    location.replace(view + ".html");
+    return;
+  }
+  document.getElementById("choose").hidden = false;
+}).catch(showProblem);
+function showProblem(problem) {
+  var note = document.createElement("p");
+  note.setAttribute("role", "alert");
+  note.textContent = "Could not start: " + problem.message;
+  document.body.appendChild(note);
+}
+</script>
 </body>
 </html>

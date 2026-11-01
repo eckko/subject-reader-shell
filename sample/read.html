@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- Made by tools/make_subject_pages.py (recall-quiz-site-template 3.0.0).
+     Loads everything from the CDN at that tag; to upgrade, run it again. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A Field Guide to Noticing (sample book)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/eckko/recall-quiz-site-template@3.0.0/reader/style.css">
+<script src="https://cdn.jsdelivr.net/gh/eckko/recall-quiz-site-template@3.0.0/js/unlock.js"></script>
+</head>
+<body>
+<script>
+SubjectUnlock.ready().then(function start() {
+  return SubjectUnlock.loadScript("https://cdn.jsdelivr.net/gh/eckko/recall-quiz-site-template@3.0.0/reader/app.js");
+}).catch(showProblem);
+function showProblem(problem) {
+  var note = document.createElement("p");
+  note.setAttribute("role", "alert");
+  note.textContent = "Could not start: " + problem.message;
+  document.body.appendChild(note);
+}
+</script>
+</body>
+</html>

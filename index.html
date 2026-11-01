@@ -1,12 +1,12 @@
 <!doctype html>
 <!--
   The hub page of a subject site. It lists the books in books.json (written
-  by tools/build_hub.py) as buttons and opens <folder>/ (a reader page that
-  loads its code from the CDN and decrypts the book in the browser).
-  The buttons show a letter, never a book cover: covers are encrypted.
+  by tools/build_hub.py) as cards with two buttons: Read book and Test only.
+  A button is greyed out when the book does not have that view. Each opens
+  <folder>/index.html?view=..., which asks for the key itself (sign in with
+  Google or paste it), then starts the reader or the quiz from the CDN.
+  The cards show a letter, never a book cover: covers are encrypted.
   The subject's name comes from subject.json. No book content lives here.
-  One key opens every book of the subject: enter it once below; it is kept
-  only for this browser tab (sessionStorage) and read by the book pages.
 -->
 <html lang="en">
 <head>
@@ -71,8 +71,14 @@
       text-decoration: none;
       overflow-wrap: anywhere;
     }
-    .book:hover { border-color: var(--accent); }
-    .book:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem;
+      margin-top: auto; width: 100%; }
+    .action { flex: 1 1 6rem; padding: .5rem .75rem; border: 1px solid var(--accent);
+      border-radius: .5rem; color: var(--accent); font-weight: 600; text-decoration: none; }
+    .action.primary { background: var(--accent); color: var(--page); }
+    .action:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .action[aria-disabled="true"] { border-color: var(--line); background: transparent;
+      color: var(--muted); opacity: .6; cursor: not-allowed; }
     .icon {
       flex: none;
       width: 5rem;
@@ -91,26 +97,12 @@
     }
     .name { font-weight: 600; }
     .note { color: var(--muted); }
-    .key { margin: 0 0 1.5rem; }
-    .key summary { cursor: pointer; color: var(--muted); font-weight: 600; }
-    .key form { display: flex; gap: .5rem; margin-top: .5rem; flex-wrap: wrap; }
-    .key input { flex: 1; min-width: 12rem; padding: .5rem; border: 1px solid var(--line);
-      border-radius: .5rem; background: var(--card); color: var(--text); font: inherit; }
-    .key button { padding: .5rem 1rem; border: 1px solid var(--accent); border-radius: .5rem;
-      background: var(--accent); color: var(--page); font: inherit; font-weight: 600; cursor: pointer; }
   </style>
 </head>
 <body>
   <main>
     <h1 id="heading">Books</h1>
     <p class="count" id="count" aria-live="polite">Loading…</p>
-    <details class="key" id="keybox">
-      <summary id="keystatus">Key: not set for this tab</summary>
-      <form id="keyform" autocomplete="off">
-        <input id="keyinput" type="password" placeholder="subject key (hex or base64)" aria-label="Subject key">
-        <button type="submit">Unlock</button>
-      </form>
-    </details>
     <ul class="books" id="books"></ul>
   </main>
   <script>
@@ -152,16 +144,43 @@
        */
       function makeButton(book) {
         var item = document.createElement("li");
-        var link = document.createElement("a");
+        var card = document.createElement("div");
         var name = document.createElement("span");
-        link.className = "book";
-        link.href = encodeURIComponent(book.folder) + "/";
+        var actions = document.createElement("div");
+        var views = book.views || [];
+        card.className = "book";
         name.className = "name";
         name.textContent = book.title;
-        link.appendChild(makeIcon(book));
-        link.appendChild(name);
-        item.appendChild(link);
+        actions.className = "actions";
+        actions.appendChild(makeAction("Read book", book, "read", views));
+        actions.appendChild(makeAction("Test only", book, "quiz", views));
+        card.appendChild(makeIcon(book));
+        card.appendChild(name);
+        card.appendChild(actions);
+        item.appendChild(card);
         return item;
+      }
+
+      /**
+       * @param {string} label  button text
+       * @param {object} book   one entry of books.json
+       * @param {string} view   "read" or "quiz"
+       * @param {string[]} views  the views this book has
+       * @returns {HTMLElement} a link, or a greyed-out button when the book
+       *   has no such view (the book page asks for the key itself)
+       */
+      function makeAction(label, book, view, views) {
+        var has = views.indexOf(view) !== -1;
+        var action = document.createElement(has ? "a" : "span");
+        action.className = "action" + (view === "read" ? " primary" : "");
+        action.textContent = label;
+        if (has) {
+          action.href = encodeURIComponent(book.folder) + "/index.html?view=" + view;
+        } else {
+          action.setAttribute("aria-disabled", "true");
+          action.title = "Not available for this book yet";
+        }
+        return action;
       }
 
       /**
@@ -180,42 +199,6 @@
         count.textContent = books.length === 0 ? "No books yet." :
           books.length + (books.length === 1 ? " book" : " books");
       }
-
-      /** Keep the subject key for this tab only; the book pages read it. */
-      function setupKey() {
-        var status = document.getElementById("keystatus");
-        var input = document.getElementById("keyinput");
-        function toHex(text) {
-          var t = String(text || "").trim();
-          if (/^[0-9a-f]{64}$/i.test(t)) return t.toLowerCase();
-          try {
-            var bin = atob(t.replace(/-/g, "+").replace(/_/g, "/"));
-            if (bin.length === 32) return Array.prototype.map.call(bin, function hex(c) { return ("0" + c.charCodeAt(0).toString(16)).slice(-2); }).join("");
-          } catch (e) { /* not base64 */ }
-          return null;
-        }
-        function show() {
-          var has = false;
-          try { has = !!sessionStorage.getItem("trial-key"); } catch (e) { has = false; }
-          status.textContent = has ? "Key: set for this tab" : "Key: not set for this tab";
-        }
-        var fromAddress = toHex((location.hash.match(/key=([^&]+)/) || [])[1] ? decodeURIComponent(location.hash.match(/key=([^&]+)/)[1]) : "");
-        if (fromAddress) {
-          try { sessionStorage.setItem("trial-key", fromAddress); } catch (e) { /* none */ }
-          history.replaceState(null, "", location.pathname + location.search);
-        }
-        document.getElementById("keyform").addEventListener("submit", function save(event) {
-          event.preventDefault();
-          var hex = toHex(input.value);
-          if (hex) {
-            try { sessionStorage.setItem("trial-key", hex); } catch (e) { /* none */ }
-            input.value = "";
-            show();
-          }
-        });
-        show();
-      }
-      setupKey();
 
       Promise.all([loadJson("subject.json"), loadJson("books.json")])
         .then(function done(files) { render(files[0], files[1]); })

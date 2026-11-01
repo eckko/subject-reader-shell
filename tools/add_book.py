@@ -3,7 +3,8 @@
 
     python3 tools/add_book.py ../private-book-repo --name clean-code
 
-Copies exactly: index.html, book.json, data/ and media/. Everything else in
+Copies exactly: index.html, read.html, quiz.html, book.json, data/, media/
+and quiz/ (those that exist). Everything else in
 the book repo (references, notes, plain extracts, ...) is never read. The copy
 is checked first (see tools/build_hub.py); when it has a problem, nothing in
 this site is changed. On success the book's folder is replaced and books.json
@@ -35,15 +36,13 @@ def copy_items(source, target):
     """
     problems = []
     for name in ("index.html", "book.json"):
+        if not (source / name).is_file():
+            problems.append("%s is missing in the book repo" % name)
+    for name in sorted(build_hub.BOOK_ITEMS):
         if (source / name).is_file():
             shutil.copy2(source / name, target / name)
-        else:
-            problems.append("%s is missing in the book repo" % name)
-    for name in ("data", "media"):
-        if (source / name).is_dir():
+        elif (source / name).is_dir():
             shutil.copytree(source / name, target / name)
-        else:
-            problems.append("%s/ is missing in the book repo" % name)
     return problems
 
 

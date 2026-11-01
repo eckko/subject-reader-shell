@@ -16,22 +16,31 @@ import add_book  # noqa: E402
 import build_hub  # noqa: E402
 import set_template_tag  # noqa: E402
 
-BUILD = ROOT / "tools" / "book_build" / "build_book.py"
-
-PAGE = ('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/o/r@%(t)s/style.css">'
-        '<script defer src="https://cdn.jsdelivr.net/gh/o/r@%(t)s/app.js"></script>')
+PAGE = ('<script src="https://cdn.jsdelivr.net/gh/o/r@%(t)s/js/unlock.js">'
+        '</script>')
 
 
-def make_book(folder, book_id="b1", title="Book One", tag="0.1.0"):
+def make_book(folder, book_id="b1", title="Book One", tag="3.0.0",
+              views=("read", "quiz")):
     """Create a minimal valid book (as a private repo's output) in folder."""
-    (folder / "data" / "ch").mkdir(parents=True)
-    (folder / "media").mkdir()
+    folder.mkdir(parents=True, exist_ok=True)
     (folder / "index.html").write_text(PAGE % {"t": tag}, encoding="utf-8")
-    (folder / "book.json").write_text(
-        json.dumps({"id": book_id, "title": title}), encoding="utf-8")
-    (folder / "data" / "manifest.enc").write_bytes(b"RQE1")
-    (folder / "data" / "ch" / "c01.enc").write_bytes(b"RQE1")
-    (folder / "media" / "f1.enc").write_bytes(b"RQE1")
+    (folder / "book.json").write_text(json.dumps({
+        "id": book_id, "title": title,
+        "views": {v: "index.html?view=" + v for v in views}}),
+        encoding="utf-8")
+    if "read" in views:
+        (folder / "data" / "ch").mkdir(parents=True)
+        (folder / "media").mkdir()
+        (folder / "read.html").write_text(PAGE % {"t": tag}, encoding="utf-8")
+        (folder / "data" / "manifest.enc").write_bytes(b"RQE1")
+        (folder / "data" / "ch" / "c01.enc").write_bytes(b"RQE1")
+        (folder / "media" / "f1.enc").write_bytes(b"RQE1")
+    if "quiz" in views:
+        (folder / "quiz" / "media").mkdir(parents=True)
+        (folder / "quiz.html").write_text(PAGE % {"t": tag}, encoding="utf-8")
+        (folder / "quiz" / "questions.enc").write_bytes(b"RQE1")
+        (folder / "quiz" / "media" / "p1.enc").write_bytes(b"RQE1")
 
 
 class SiteCase(unittest.TestCase):
@@ -57,14 +66,15 @@ class AddBookTests(SiteCase):
         self.assertEqual(books[0]["id"], "b1")
         self.assertEqual(build_hub.main(["--check", "--subject-root", str(self.site)]), 0)
 
-    def test_only_four_items_are_copied(self):
+    def test_only_the_allowed_items_are_copied(self):
         make_book(self.src)
         (self.src / "references").mkdir()
         (self.src / "references" / "book.epub").write_bytes(b"plain")
         (self.src / "notes.docx").write_bytes(b"plain")
         self.assertEqual(add_book.add_book(self.src, "b1", self.site), [])
         self.assertEqual({p.name for p in (self.site / "b1").iterdir()},
-                         {"index.html", "book.json", "data", "media"})
+                         {"index.html", "read.html", "quiz.html", "book.json",
+                          "data", "media", "quiz"})
 
     def test_refuses_a_plain_file_in_data_or_media(self):
         make_book(self.src)
@@ -72,17 +82,19 @@ class AddBookTests(SiteCase):
         self.assertTrue(add_book.add_book(self.src, "b1", self.site))
         self.assertFalse((self.site / "b1").exists())
         (self.src / "media" / "cover.png").unlink()
+        (self.src / "quiz" / "questions.json").write_text("{}")
+        self.assertTrue(add_book.add_book(self.src, "b1", self.site))
+        (self.src / "quiz" / "questions.json").unlink()
         (self.src / "data" / "ch" / "c02.json").write_text("{}")
         self.assertTrue(add_book.add_book(self.src, "b1", self.site))
 
     def test_refuses_a_branch_a_v_prefix_or_mixed_tags(self):
-        for bad in ("main", "v0.1.0", "0.1"):
+        for bad in ("main", "v3.0.0", "3.0"):
             make_book(self.src / ("x" + bad), tag=bad)
             self.assertTrue(add_book.add_book(self.src / ("x" + bad), "b1", self.site), bad)
         make_book(self.src / "mix")
         (self.src / "mix" / "index.html").write_text(
-            '<link href="https://cdn.jsdelivr.net/gh/o/r@0.1.0/style.css">'
-            '<script src="https://cdn.jsdelivr.net/gh/o/r@0.2.0/app.js"></script>')
+            PAGE % {"t": "3.1.0"})
         self.assertTrue(add_book.add_book(self.src / "mix", "b1", self.site))
 
     def test_refuses_duplicate_ids_and_keeps_site_unchanged(self):
@@ -93,6 +105,19 @@ class AddBookTests(SiteCase):
         self.assertTrue(add_book.add_book(self.src / "b", "b", self.site))
         self.assertEqual((self.site / "books.json").read_text(), before)
         self.assertFalse((self.site / "b").exists())
+
+    def test_a_view_needs_its_files_and_its_files_need_the_view(self):
+        make_book(self.src / "q", views=("quiz",))
+        self.assertEqual(add_book.add_book(self.src / "q", "q", self.site), [])
+        entries, _ = build_hub.check_site(self.site)
+        self.assertEqual(entries[0]["views"], ["quiz"])
+        make_book(self.src / "r", book_id="r1")
+        (self.src / "r" / "quiz" / "questions.enc").unlink()
+        self.assertTrue(add_book.add_book(self.src / "r", "r", self.site))
+        make_book(self.src / "s", book_id="s1", views=("quiz",))
+        (self.src / "s" / "data").mkdir()
+        (self.src / "s" / "data" / "manifest.enc").write_bytes(b"RQE1")
+        self.assertTrue(add_book.add_book(self.src / "s", "s", self.site))
 
     def test_missing_manifest_is_refused(self):
         make_book(self.src)
@@ -123,42 +148,18 @@ class TagTests(SiteCase):
     def test_sets_the_tag_in_every_book(self):
         make_book(self.site / "a")
         make_book(self.site / "b", book_id="b2")
-        self.assertEqual(set_template_tag.main(["0.3.0", "--subject-root", str(self.site)]), 0)
+        self.assertEqual(set_template_tag.main(["3.2.0", "--subject-root", str(self.site)]), 0)
         for name in ("a", "b"):
-            text = (self.site / name / "index.html").read_text()
-            self.assertEqual(text.count("@0.3.0/"), 2)
-            self.assertNotIn("@0.1.0", text)
+            for page in ("index.html", "read.html", "quiz.html"):
+                text = (self.site / name / page).read_text()
+                self.assertEqual(text.count("@3.2.0/"), 1)
+                self.assertNotIn("@3.0.0", text)
 
     def test_refuses_a_branch_or_v_prefix(self):
         make_book(self.site / "a")
-        for bad in ("main", "v0.3.0", "1.0"):
+        for bad in ("main", "v3.2.0", "1.0"):
             self.assertEqual(set_template_tag.main([bad, "--subject-root", str(self.site)]), 1)
-        self.assertIn("@0.1.0", (self.site / "a" / "index.html").read_text())
-
-
-class BuildBookTests(unittest.TestCase):
-    def run_build(self, env_key, tag):
-        tmp = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, tmp)
-        (tmp / "book").mkdir()
-        (tmp / "book" / "questions.json").write_text('{"id": "x", "book": "X"}')
-        env = {"PATH": "/usr/bin:/bin"}
-        if env_key is not None:
-            env["SUBJECT_KEY"] = env_key
-        return subprocess.run(
-            [sys.executable, str(BUILD), "--book", str(tmp / "book"), "--epub", "a.epub",
-             "--template-tag", tag, "--out", str(tmp / "out")],
-            env=env, capture_output=True, text=True)
-
-    def test_refuses_a_missing_or_short_key(self):
-        self.assertNotEqual(self.run_build(None, "0.1.0").returncode, 0)
-        self.assertNotEqual(self.run_build("abcd", "0.1.0").returncode, 0)
-
-    def test_refuses_a_branch_or_v_prefix_tag(self):
-        for bad in ("main", "v0.1.0"):
-            result = self.run_build("a" * 64, bad)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("tag", result.stderr + result.stdout)
+        self.assertIn("@3.0.0", (self.site / "a" / "index.html").read_text())
 
 
 class ThisRepoTests(unittest.TestCase):

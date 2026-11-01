@@ -11,7 +11,8 @@ the four things a private book repo is allowed to publish:
 
     index.html    a few lines: loads the reader (app.js, style.css) from the
                   CDN by an exact tag
-    book.json     {"id": "...", "title": "..."}: public, used by the hub
+    book.json     {"id": "...", "title": "...", "views": {...}}: public, used
+                  by the hub; "views" says which of read / quiz exist
     data/         encrypted files only: manifest.enc and ch/*.enc
     media/        encrypted files only: *.enc
 
@@ -34,13 +35,20 @@ ALLOWED_ROOT_FILES = {
     "index.html", "books.json", "subject.json", "README.md", "CLAUDE.md",
     ".gitignore", ".nojekyll", "CNAME", "LICENSE",
 }
-BOOK_ITEMS = {"index.html", "book.json", "data", "media"}
+BOOK_ITEMS = {"index.html", "read.html", "quiz.html", "book.json",
+              "data", "media", "quiz"}
+ENCRYPTED_FOLDERS = ("data", "media", "quiz")
+# what each view needs in the book folder
+VIEW_FILES = {
+    "read": ("read.html", "data/manifest.enc"),
+    "quiz": ("quiz.html", "quiz/questions.enc"),
+}
+VIEW_LINK = "index.html?view="
 FOLDER_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 # an exact tag is X.Y.Z with no "v" and no branch name
 CDN_URL = r"https://cdn\.jsdelivr\.net/gh/[\w.-]+/[\w.-]+@(\d+\.\d+\.\d+)/"
-PINNED_SCRIPT = re.compile(CDN_URL + r"app\.js")
-PINNED_STYLE = re.compile(CDN_URL + r"style\.css")
+PINNED_UNLOCK = re.compile(CDN_URL + r"js/unlock\.js")
 BOOKS_FILE = "books.json"
 
 
@@ -61,57 +69,69 @@ def load_subject(root):
     return settings, problems
 
 
-def check_contents(folder):
+def check_contents(folder, views):
     """Check that a book folder holds only the allowed things.
 
     @param folder: path of the book folder
+    @param views: the views book.json lists ("read" and/or "quiz")
     @return: list of problems
     """
     problems = []
     name = folder.name
     for item in sorted(folder.iterdir()):
         if item.name not in BOOK_ITEMS:
-            problems.append("%s/%s is not one of the four allowed items"
+            problems.append("%s/%s is not one of the allowed items"
                             % (name, item.name))
-    for part in ("data", "media"):
+    for part in ENCRYPTED_FOLDERS:
         base = folder / part
-        if not base.is_dir():
-            problems.append("%s/%s is missing" % (name, part))
-            continue
-        for item in sorted(base.rglob("*")):
+        for item in sorted(base.rglob("*")) if base.is_dir() else []:
             if item.is_file() and item.suffix != ".enc":
                 problems.append("%s/%s/%s is not an encrypted .enc file"
                                 % (name, part,
                                    item.relative_to(base).as_posix()))
-    if not (folder / "data" / "manifest.enc").is_file():
-        problems.append("%s/data/manifest.enc is missing" % name)
+    for view, needed in VIEW_FILES.items():
+        for path in needed:
+            has = (folder / path).is_file()
+            if view in views and not has:
+                problems.append("%s/%s is missing (book.json lists the %s "
+                                "view)" % (name, path, view))
+            if view not in views and has:
+                problems.append("%s/%s exists but book.json does not list "
+                                "the %s view" % (name, path, view))
     return problems
 
 
-def check_loader(folder):
-    """Check that index.html loads the reader from one exact CDN tag.
+def check_loader(folder, views):
+    """Check that every page loads js/unlock.js from one exact CDN tag.
 
     @param folder: path of the book folder
+    @param views: the views book.json lists
     @return: list of problems
     """
-    page = folder / "index.html"
-    try:
-        text = page.read_text(encoding="utf-8")
-    except OSError:
-        return ["%s/index.html is missing" % folder.name]
-    script, style = PINNED_SCRIPT.search(text), PINNED_STYLE.search(text)
-    if not script or not style:
-        return ["%s/index.html must load app.js and style.css from the CDN "
-                "by an exact tag such as @0.1.0 (no \"v\", no branch)"
-                % folder.name]
-    if script.group(1) != style.group(1):
-        return ["%s/index.html: app.js and style.css use different tags"
-                % folder.name]
-    return []
+    tags, problems = set(), []
+    pages = ["index.html"] + [VIEW_FILES[v][0] for v in views
+                              if v in VIEW_FILES]
+    for name in pages:
+        try:
+            text = (folder / name).read_text(encoding="utf-8")
+        except OSError:
+            problems.append("%s/%s is missing" % (folder.name, name))
+            continue
+        found = PINNED_UNLOCK.search(text)
+        if not found:
+            problems.append("%s/%s must load js/unlock.js from the CDN by "
+                            "an exact tag such as @3.0.0 (no \"v\", no "
+                            "branch)" % (folder.name, name))
+        else:
+            tags.add(found.group(1))
+    if len(tags) > 1:
+        problems.append("%s: the pages use different template tags"
+                        % folder.name)
+    return problems
 
 
 def read_book(folder):
-    """Read the id and title from a book's book.json.
+    """Read the id, title and views from a book's book.json.
 
     @param folder: path of the book folder
     @return: (entry dict or None, list of problems)
@@ -129,9 +149,17 @@ def read_book(folder):
                         "letters, digits and dashes" % folder.name)
     if not isinstance(title, str) or not title.strip():
         problems.append("%s/book.json: \"title\" is missing" % folder.name)
+    views = data.get("views")
+    if (not isinstance(views, dict) or not views
+            or set(views) - set(VIEW_FILES)
+            or any(v != VIEW_LINK + k for k, v in views.items())):
+        problems.append("%s/book.json: \"views\" must list read and/or "
+                        "quiz, for example {\"quiz\": \"%squiz\"}"
+                        % (folder.name, VIEW_LINK))
     if problems:
         return None, problems
-    return {"folder": folder.name, "id": book_id, "title": title.strip()}, []
+    return {"folder": folder.name, "id": book_id, "title": title.strip(),
+            "views": sorted(views)}, []
 
 
 def check_book(folder):
@@ -143,10 +171,12 @@ def check_book(folder):
     if not FOLDER_PATTERN.match(folder.name):
         return None, ["folder \"%s\": use lower-case letters, digits and "
                       "dashes" % folder.name]
-    problems = check_contents(folder) + check_loader(folder)
-    entry, more = read_book(folder) if (folder / "book.json").is_file() \
-        else (None, ["%s/book.json is missing" % folder.name])
-    problems += more
+    if not (folder / "book.json").is_file():
+        return None, ["%s/book.json is missing" % folder.name]
+    entry, problems = read_book(folder)
+    if entry:
+        problems = check_contents(folder, entry["views"]) \
+            + check_loader(folder, entry["views"])
     return entry, problems
 
 

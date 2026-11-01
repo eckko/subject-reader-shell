@@ -42,7 +42,7 @@ is **never** stored in any repo. One key opens every book of the subject.
 ## Open a book
 
 Open the hub, open "Key: not set for this tab", paste the subject key
-(64 hex characters), press Unlock, then open a book. The key is kept only for
+(hex or base64), press Unlock, then open a book. The key is kept only for
 that browser tab. You can also open a link ending in `#key=<key>`; the page
 removes the key from the address straight away. Do not share links with a key.
 Without a key a book page asks for one.

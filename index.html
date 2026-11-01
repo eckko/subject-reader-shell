@@ -107,7 +107,7 @@
     <details class="key" id="keybox">
       <summary id="keystatus">Key: not set for this tab</summary>
       <form id="keyform" autocomplete="off">
-        <input id="keyinput" type="password" placeholder="64 hex characters" aria-label="Subject key">
+        <input id="keyinput" type="password" placeholder="subject key (hex or base64)" aria-label="Subject key">
         <button type="submit">Unlock</button>
       </form>
     </details>
@@ -185,20 +185,30 @@
       function setupKey() {
         var status = document.getElementById("keystatus");
         var input = document.getElementById("keyinput");
+        function toHex(text) {
+          var t = String(text || "").trim();
+          if (/^[0-9a-f]{64}$/i.test(t)) return t.toLowerCase();
+          try {
+            var bin = atob(t.replace(/-/g, "+").replace(/_/g, "/"));
+            if (bin.length === 32) return Array.prototype.map.call(bin, function hex(c) { return ("0" + c.charCodeAt(0).toString(16)).slice(-2); }).join("");
+          } catch (e) { /* not base64 */ }
+          return null;
+        }
         function show() {
           var has = false;
           try { has = !!sessionStorage.getItem("trial-key"); } catch (e) { has = false; }
           status.textContent = has ? "Key: set for this tab" : "Key: not set for this tab";
         }
-        var fromAddress = (location.hash.match(/key=([0-9a-f]{64})/i) || [])[1];
+        var fromAddress = toHex((location.hash.match(/key=([^&]+)/) || [])[1] ? decodeURIComponent(location.hash.match(/key=([^&]+)/)[1]) : "");
         if (fromAddress) {
           try { sessionStorage.setItem("trial-key", fromAddress); } catch (e) { /* none */ }
           history.replaceState(null, "", location.pathname + location.search);
         }
         document.getElementById("keyform").addEventListener("submit", function save(event) {
           event.preventDefault();
-          if (/^[0-9a-f]{64}$/i.test(input.value.trim())) {
-            try { sessionStorage.setItem("trial-key", input.value.trim()); } catch (e) { /* none */ }
+          var hex = toHex(input.value);
+          if (hex) {
+            try { sessionStorage.setItem("trial-key", hex); } catch (e) { /* none */ }
             input.value = "";
             show();
           }

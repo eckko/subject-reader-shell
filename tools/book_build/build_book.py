@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the publishable, encrypted site of one private book repo.
 
-    SUBJECT_KEY=<64 hex> python3 tools/book_build/build_book.py \\
+    SUBJECT_KEY=<64 hex or base64> python3 tools/book_build/build_book.py \\
         --book PATH_TO_BOOK_REPO --epub references/Book.epub \\
         [--notes-epub references/notes.epub] \\
         --template-repo eckko/encrypted-book-template --template-tag 0.1.0 \\
@@ -20,6 +20,8 @@ Steps: unzip the book EPUB, cut it into chapters / sections / subtopics
 """
 import argparse
 import json
+import base64
+import binascii
 import os
 import re
 import shutil
@@ -56,6 +58,18 @@ def run(*args):
         sys.exit("build step failed: %s" % Path(str(args[0])).name)
 
 
+def parse_key(text):
+    """The subject key as 64 hex characters, from hex or from 32 bytes in base64."""
+    text = text.strip()
+    if re.fullmatch(r"[0-9a-fA-F]{64}", text):
+        return text.lower()
+    try:
+        raw = base64.b64decode(text.replace("-", "+").replace("_", "/"), validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    return raw.hex() if len(raw) == 32 else None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--book", type=Path, required=True)
@@ -66,9 +80,9 @@ def main(argv=None):
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
 
-    key = os.environ.get("SUBJECT_KEY", "").strip()
-    if not re.fullmatch(r"[0-9a-fA-F]{64}", key):
-        sys.exit("SUBJECT_KEY must be set to 64 hex characters")
+    key = parse_key(os.environ.get("SUBJECT_KEY", ""))
+    if not key:
+        sys.exit("SUBJECT_KEY must be 32 bytes: 64 hex characters or base64")
     if not TAG.match(args.template_tag):
         sys.exit("the template tag must look like 0.1.0 (no \"v\", no branch)")
     book = args.book.resolve()

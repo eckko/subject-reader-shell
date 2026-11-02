@@ -29,3 +29,11 @@ jobs:
           path: .template   # a dot-folder, so the tool does not count it as a book folder
       - name: Book folders and books.json
         run: python3 .template/tools/site/build_hub.py --check
+      - name: The hub shell loads the UI by one exact tag
+        run: |
+          tags="$(grep -o 'subject-site-template@[^/]*' index.html | sort -u)"
+          n="$(printf '%s\n' "$tags" | grep -c .)"
+          if [ "$n" != 1 ] || ! printf '%s' "$tags" | grep -Eq '^subject-site-template@[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::index.html must load subject-site-template by one exact tag (found: $tags)"
+            exit 1
+          fi

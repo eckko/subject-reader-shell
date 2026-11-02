@@ -26,6 +26,6 @@ jobs:
         with:
           repository: eckko/recall-quiz-site-template
           ref: ${{ steps.tag.outputs.tag }}
-          path: template
+          path: .template   # a dot-folder, so the tool does not count it as a book folder
       - name: Book folders and books.json
-        run: python3 template/tools/site/build_hub.py --check
+        run: python3 .template/tools/site/build_hub.py --check

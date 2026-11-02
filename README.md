@@ -9,12 +9,33 @@ from [`eckko/recall-quiz-site-template`](https://github.com/eckko/recall-quiz-si
 (3.0.0 and later). Each book card on the hub has two buttons, **Read book**
 and **Test only**, greyed out when the book has no such view.
 
+## The hub UI (not in this repo)
+
+`index.html` is a tiny shell. The whole hub UI (sign-in screen, shelf with
+covers, search, sort, filters, cards / list / compact views, the gear and the
+icons) is loaded from
+[`eckko/subject-site-template`](https://github.com/eckko/subject-site-template)
+on jsDelivr by one **exact release tag**, written three times in `index.html`
+(`js/hub.js`, the favicon and the iOS icon: keep them the same). **Subject
+repos hold encrypted data only; all UI changes are made in that repo**, which
+then gets a new tag. To move to it, change the tag in those three URLs.
+
+The hub is **sign-in only**: until the reader has signed in (or pasted the
+key) it shows nothing but a sign-in screen; the gear works there too. After
+that it shows each book's cover (decrypted from
+`<book>/media/<id>_front_cover.enc`), with search, filters, sort, views and
+the gear (theme, font size, **Sign out**). Progress comes from this browser's
+saved quiz progress. It starts in the Classic theme, light, at 16px.
+
+`subject.json` can add `bookDetails` for the cards:
+`{"<book id>": {"authors": ["Name"], "edition": "2nd", "year": 2018}}`.
+
 This is the encrypted counterpart of
 [`eckko/subject-site-shell`](https://github.com/eckko/subject-site-shell).
 
 ```
 <subject repo>/            public, Pages from main, folder /
-  index.html               the hub: a card per book with Read book / Test only
+  index.html               the hub shell: loads the hub UI from the CDN by tag
   subject.json             the subject's title
   books.json               written by tools/build_hub.py (do not edit)
   clean-code/              pushed by the private repo "clean-code"

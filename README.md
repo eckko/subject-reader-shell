@@ -11,14 +11,16 @@ and **Test only**, greyed out when the book has no such view.
 
 ## The hub UI (not in this repo)
 
-`index.html` is a tiny shell. The whole hub UI (sign-in screen, shelf with
-covers, search, sort, filters, cards / list / compact views, the gear and the
-icons) is loaded from
+`index.html` is a tiny fixed loader. It reads `uiVersion` from `subject.json`
+and loads the whole hub UI (sign-in screen, shelf with covers, search, sort,
+filters, cards / list / compact views, the gear and the icons) from
 [`eckko/subject-site-template`](https://github.com/eckko/subject-site-template)
-on jsDelivr by one **exact release tag**, written three times in `index.html`
-(`js/hub.js`, the favicon and the iOS icon: keep them the same). **Subject
-repos hold encrypted data only; all UI changes are made in that repo**, which
-then gets a new tag. To move to it, change the tag in those three URLs.
+on jsDelivr. `"uiVersion": "1"` means the newest `1.x.x` release, so minor and
+patch updates reach this site by themselves (a browser may take a while to see
+one because of caching). **Subject repos hold encrypted data only; all UI
+changes are made in that repo.** A new major version (breaking changes) is
+adopted by hand: set `"uiVersion": "2"` in `subject.json`. Pin an exact
+release (`"1.2.3"`) to stop updates.
 
 The hub is **sign-in only**: until the reader has signed in (or pasted the
 key) it shows nothing but a sign-in screen; the gear works there too. After

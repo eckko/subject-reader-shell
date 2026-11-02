@@ -1,19 +1,42 @@
 <!doctype html>
 <!--
-  The hub page of this subject site. It holds no UI code: everything (sign-in
-  screen, shelf, gear, icons) is loaded from
-  https://github.com/eckko/subject-site-template by one exact release tag.
-  To move to a newer UI, change the tag in the three URLs below (all the same).
-  Change the UI itself in that repo, never here.
+  The hub page of this subject site. It holds no UI code and never changes:
+  the loader at the end reads "uiVersion" from subject.json ("1" = the newest
+  1.x.x release of https://github.com/eckko/subject-site-template) and loads
+  the whole UI (sign-in screen, shelf, gear, icons) from jsDelivr. Minor and
+  patch releases arrive by themselves; a new major version is adopted by
+  editing "uiVersion" in subject.json. Change the UI in that repo, never here.
 -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Books</title>
-  <link rel="icon" type="image/svg+xml" href="https://cdn.jsdelivr.net/gh/eckko/subject-site-template@1.0.0/img/icon.svg">
-  <link rel="apple-touch-icon" sizes="180x180" href="https://cdn.jsdelivr.net/gh/eckko/subject-site-template@1.0.0/img/apple-touch-icon.png">
-  <script src="https://cdn.jsdelivr.net/gh/eckko/subject-site-template@1.0.0/js/hub.js"></script>
 </head>
-<body><noscript>This page needs JavaScript.</noscript></body>
+<body>
+<noscript>This page needs JavaScript.</noscript>
+<script>
+(function () {
+  "use strict";
+  function fail(text) {
+    var p = document.createElement("p"); p.textContent = text;
+    document.body.appendChild(p);
+  }
+  fetch("subject.json", { cache: "no-cache" }).then(function (r) {
+    if (!r.ok) { throw new Error("subject.json: HTTP " + r.status); }
+    return r.json();
+  }).then(function (subject) {
+    var v = String(subject.uiVersion || "");
+    if (!/^[0-9]+(\.[0-9]+){0,2}$/.test(v)) {
+      throw new Error('subject.json needs "uiVersion" such as "1"');
+    }
+    var s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/gh/eckko/subject-site-template@" + v +
+      "/js/hub.js";
+    s.onerror = function () { fail("Could not load the hub UI (" + v + ")."); };
+    document.body.appendChild(s);
+  }).catch(function (e) { fail("Could not start: " + e.message); });
+})();
+</script>
+</body>
 </html>

@@ -36,7 +36,7 @@ jobs:
             echo "::error::subject.json needs uiVersion such as \"1\" (newest 1.x.x), got '$v'"
             exit 1
           fi
-          if grep -q 'subject-site-template@' index.html; then
+          if grep -Eq 'subject-site-template@[0-9]' index.html; then
             echo "::error::index.html must not hold a version; it comes from subject.json"
             exit 1
           fi
